@@ -13,3 +13,8 @@ footer { margin-top: 22px; color: var(--muted); }
 .badge.err { background:#3b1b1b; color:#f3b7b7; }
 .price { font-size: 28px; font-weight: 800; }
 .dim { color: var(--muted); }
+
+.table { overflow-x:auto; margin-top: 10px; }
+table { width:100%; border-collapse: collapse; }
+th, td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: right; }
+th { color: var(--muted); font-weight: 600; }
