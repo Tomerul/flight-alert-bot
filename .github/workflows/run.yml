@@ -14,18 +14,27 @@ jobs:
         with:
           python-version: "3.11"
       - name: Debug workspace
+        env:
+          HAS_EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+          HAS_EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+          HAS_EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          HAS_EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          HAS_EMAIL_TO:   ${{ secrets.EMAIL_TO }}
+          HAS_AMADEUS_API_KEY: ${{ secrets.AMADEUS_API_KEY }}
+          HAS_AMADEUS_API_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
         run: |
           echo "Python version:" && python --version
           echo "Repo files:" && ls -la
-          echo "Show config.yaml exists:" && [ -f config.yaml ] && echo OK || echo MISSING
-          echo "Env flags (לא הערכים!):"
-          for v in EMAIL_HOST EMAIL_PORT EMAIL_USER EMAIL_PASS EMAIL_TO AMADEUS_API_KEY AMADEUS_API_SECRET; do
-            if [ -z "${{ secrets[$v] || '' }}" ]; then
-              echo "❌ secret $v is NOT set"
-            else
-              echo "✅ secret $v is set"
-            fi
-          done
+          echo "config.yaml exists?" && { [ -f config.yaml ] && echo "✅ yes" || echo "❌ no"; }
+
+          [ -z "$HAS_EMAIL_HOST" ] && echo "❌ secret EMAIL_HOST not set" || echo "✅ EMAIL_HOST set"
+          [ -z "$HAS_EMAIL_PORT" ] && echo "❌ secret EMAIL_PORT not set" || echo "✅ EMAIL_PORT set"
+          [ -z "$HAS_EMAIL_USER" ] && echo "❌ secret EMAIL_USER not set" || echo "✅ EMAIL_USER set"
+          [ -z "$HAS_EMAIL_PASS" ] && echo "❌ secret EMAIL_PASS not set" || echo "✅ EMAIL_PASS set"
+          [ -z "$HAS_EMAIL_TO" ]   && echo "❌ secret EMAIL_TO not set"   || echo "✅ EMAIL_TO set"
+          [ -z "$HAS_AMADEUS_API_KEY" ]    && echo "❌ AMADEUS_API_KEY not set"    || echo "✅ AMADEUS_API_KEY set"
+          [ -z "$HAS_AMADEUS_API_SECRET" ] && echo "❌ AMADEUS_API_SECRET not set" || echo "✅ AMADEUS_API_SECRET set"
+
       - name: Install deps
         run: pip install -r requirements.txt
       - name: Run main.py
