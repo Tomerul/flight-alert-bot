@@ -1,21 +1,18 @@
 currency: ILS
-adults: 2   # מספר מבוגרים בסה"כ
+adults: 2
 
 route:
   origin: TLV
-  destination: HKT
+  destination: JFK
 
-  # יציאה: תאריך מרכזי וטווח ±ימים
-  depart_center_date: 2026-01-08
+  depart_center_date: 2025-11-20
   depart_window_days: 3
 
-  # חזרה: תאריך מרכזי וטווח ±ימים
-  return_center_date: 2026-01-20
+  return_center_date: 2025-12-05
   return_window_days: 3
 
-  max_price: 8000   # סף למחיר כולל הלוך+חזור במטבע שלמעלה
-  airline: LY       # סינון לחברת תעופה (השאר ריק "" אם לא צריך)
+  max_price: 2300
+  airline: LY
 
-  # אופציונלי: אילוץ מרחק ימים מינ'/מקס' בין היציאה לחזרה
-  min_stay_days: 10
-  max_stay_days: 14
+  min_stay_days: 1
+  max_stay_days: 30
