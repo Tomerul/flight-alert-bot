@@ -6,11 +6,11 @@ route:
   destination: HKT
 
   # יציאה: תאריך מרכזי וטווח ±ימים
-  depart_center_date: 2026-1-8
+  depart_center_date: 2026-01-08
   depart_window_days: 3
 
   # חזרה: תאריך מרכזי וטווח ±ימים
-  return_center_date: 2026-1-20
+  return_center_date: 2026-01-20
   return_window_days: 3
 
   max_price: 8000   # סף למחיר כולל הלוך+חזור במטבע שלמעלה
