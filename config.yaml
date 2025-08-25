@@ -6,18 +6,18 @@ route:
   destination: HKT
 
   # יציאה: תאריך מרכזי וטווח ±ימים
-  depart_center_date: "2026-01-08"
+  depart_center_date: "2025-12-20"
   depart_window_days: 3
 
   # חזרה: תאריך מרכזי וטווח ±ימים
-  return_center_date: "2026-01-18"
+  return_center_date: "2026-05-30"
   return_window_days: 3
 
   # סף למחיר כולל (הלוך+חזור) במטבע למעלה
-  max_price: 7000
+  max_price: 4500
 
   # סינון לפי חברת תעופה (השאר ריק "" אם לא צריך)
-  airline: LY
+  airline: ""
 
   # אילוץ שהייה מינימלית/מקסימלית (ימים)
   min_stay_days: 11
