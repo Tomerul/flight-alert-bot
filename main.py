@@ -150,4 +150,10 @@ def main():
         print("ℹ️ לא נמצאה עסקה מתחת לסף. Best:", best)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback, sys
+        print("🔥 ERROR:", repr(e))
+        traceback.print_exc()
+        sys.exit(1)
