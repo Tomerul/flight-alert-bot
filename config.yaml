@@ -10,11 +10,11 @@ route:
   depart_window_days: 2
 
   # חזרה: תאריך מרכזי וטווח ±ימים
-  return_center_date: "2025-05-30"
+  return_center_date: "2026-05-30"
   return_window_days: 2
 
   # סף להתראה (החיפוש עצמו לא תלוי בזה)
-  max_price: 999999
+  max_price: 7000
 
   # בלי סינון חברת תעופה (בדיקה של כל החברות)
   # airline: ""
