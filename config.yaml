@@ -1,0 +1,21 @@
+currency: ILS
+adults: 2   # מספר מבוגרים בסה"כ
+
+route:
+  origin: TLV
+  destination: HKT
+
+  # יציאה: תאריך מרכזי וטווח ±ימים
+  depart_center_date: 2026-1-8
+  depart_window_days: 3
+
+  # חזרה: תאריך מרכזי וטווח ±ימים
+  return_center_date: 2026-1-20
+  return_window_days: 3
+
+  max_price: 8000   # סף למחיר כולל הלוך+חזור במטבע שלמעלה
+  airline: LY       # סינון לחברת תעופה (השאר ריק "" אם לא צריך)
+
+  # אופציונלי: אילוץ מרחק ימים מינ'/מקס' בין היציאה לחזרה
+  min_stay_days: 10
+  max_stay_days: 14
