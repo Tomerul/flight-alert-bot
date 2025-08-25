@@ -15,3 +15,10 @@ jobs:
           python-version: "3.11"
       - name: Run main.py
         run: python main.py
+env:
+    EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+    EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+    EMAIL_USER: ${{ secrets.EMAIL_USER }}
+    EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+    EMAIL_TO:   ${{ secrets.EMAIL_TO }}
+    EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
