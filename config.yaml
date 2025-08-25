@@ -1,24 +1,18 @@
 currency: ILS
-adults: 2
+adults: 1
 
 route:
-  origin: TLV
-  destination: HKT
+  origin: LON
+  destination: NYC
 
-  # יציאה: תאריך מרכזי וטווח ±ימים
-  depart_center_date: "2025-12-20"
-  depart_window_days: 3
+  depart_center_date: "2025-10-15"
+  depart_window_days: 1
 
-  # חזרה: תאריך מרכזי וטווח ±ימים
-  return_center_date: "2026-05-30"
-  return_window_days: 3
+  return_center_date: "2025-10-22"
+  return_window_days: 1
 
-  # סף למחיר כולל (הלוך+חזור) במטבע למעלה
-  max_price: 10000
+  max_price: 999999
+  # airline: ""   # בלי סינון
 
-  # סינון לפי חברת תעופה (השאר ריק "" אם לא צריך)
-  # airline: ""
-
-  # אילוץ שהייה מינימלית/מקסימלית (ימים)
-  min_stay_days: 11
-  max_stay_days: 14
+  min_stay_days: 1
+  max_stay_days: 30
