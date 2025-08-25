@@ -1,18 +1,24 @@
 currency: ILS
-adults: 1
+adults: 2
 
 route:
-  origin: LON
-  destination: NYC
+  origin: TLV
+  destination: HKT   # פוקט (Phuket). קוד IATA לעיר/שדה: HKT
 
-  depart_center_date: "2025-10-15"
-  depart_window_days: 1
+  # יציאה: תאריך מרכזי וטווח ±ימים
+  depart_center_date: "2025-12-20"
+  depart_window_days: 2
 
-  return_center_date: "2025-10-22"
-  return_window_days: 1
+  # חזרה: תאריך מרכזי וטווח ±ימים
+  return_center_date: "2025-05-30"
+  return_window_days: 2
 
+  # סף להתראה (החיפוש עצמו לא תלוי בזה)
   max_price: 999999
-  # airline: ""   # בלי סינון
 
-  min_stay_days: 1
-  max_stay_days: 30
+  # בלי סינון חברת תעופה (בדיקה של כל החברות)
+  # airline: ""
+
+  # אילוץ שהייה מינ'/מקס' (ימים)
+  min_stay_days: 11
+  max_stay_days: 14
