@@ -1,0 +1,17 @@
+name: flight-alert-schedule
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"   # רץ כל שעתיים (ב-UTC)
+  workflow_dispatch: {}      # כפתור להרצה ידנית
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run main.py
+        run: python main.py
