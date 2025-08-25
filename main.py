@@ -1,17 +1,6 @@
 from datetime import datetime, timedelta
-import os, smtplib, ssl, requests
+import os, smtplib, ssl, requests, yaml
 from email.message import EmailMessage
-
-# ======= הגדרות מסלול (תעדכן לפי הצורך) =======
-ORIGIN = "TLV"             # מוצא
-DESTINATION = "LHR"        # יעד
-CENTER_DATE = "2025-10-10" # תאריך מרכזי (YYYY-MM-DD)
-WINDOW_DAYS = 3            # ± ימים סביב התאריך
-MAX_PRICE = 6000           # סף מחיר ב-ILS
-ADULTS = 1                 # מספר מבוגרים
-CURRENCY = "ILS"
-FILTER_AIRLINE = "LY"      # אל-על (LY). אם לא רוצים סינון - השאר ריק: ""
-# ===============================================
 
 def send_email(subject: str, body: str):
     host = os.environ["EMAIL_HOST"]
@@ -43,20 +32,28 @@ def get_amadeus_token():
     r.raise_for_status()
     return r.json()["access_token"]
 
-def search_day(origin, destination, date_str, adults=1, currency="ILS"):
-    """חיפוש הצעות ליום אחד, מחזיר רשימת offers (או ריק)."""
-    token = get_amadeus_token()
+def amadeus_roundtrip_offers(token, origin, destination, depart_date, return_date, adults=1, currency="ILS"):
+    """
+    בקשת הלוך-חזור: שני originDestinations — יציאה וחזרה.
+    """
     url = "https://test.api.amadeus.com/v2/shopping/flight-offers"
     payload = {
         "currencyCode": currency,
-        "originDestinations": [{
-            "id": "1",
-            "originLocationCode": origin,
-            "destinationLocationCode": destination,
-            "departureDateTimeRange": { "date": date_str }
-        }],
-        "travelers": [{"id": "1", "travelerType": "ADULT"}] if adults == 1 else
-                     [{"id": str(i+1), "travelerType": "ADULT"} for i in range(adults)],
+        "originDestinations": [
+            {   # יציאה
+                "id": "1",
+                "originLocationCode": origin,
+                "destinationLocationCode": destination,
+                "departureDateTimeRange": {"date": depart_date}
+            },
+            {   # חזרה
+                "id": "2",
+                "originLocationCode": destination,
+                "destinationLocationCode": origin,
+                "departureDateTimeRange": {"date": return_date}
+            }
+        ],
+        "travelers": [{"id": str(i+1), "travelerType": "ADULT"} for i in range(adults)],
         "sources": ["GDS"]
     }
     headers = {"Authorization": f"Bearer {token}"}
@@ -65,7 +62,6 @@ def search_day(origin, destination, date_str, adults=1, currency="ILS"):
     return r.json().get("data", []) or []
 
 def is_offer_on_airline(offer, airline_code):
-    """בודק אם ההצעה כוללת את חברת התעופה (למשל LY)."""
     if not airline_code:
         return True
     if airline_code in (offer.get("validatingAirlineCodes") or []):
@@ -76,42 +72,82 @@ def is_offer_on_airline(offer, airline_code):
                 return True
     return False
 
+def date_list(center_iso, window_days):
+    center = datetime.fromisoformat(center_iso)
+    return [(center + timedelta(days=off)).strftime("%Y-%m-%d")
+            for off in range(-window_days, window_days + 1)]
+
 def main():
-    # בניית טווח תאריכים סביב CENTER_DATE
-    center = datetime.fromisoformat(CENTER_DATE)
-    days = [(center + timedelta(days=off)).strftime("%Y-%m-%d")
-            for off in range(-WINDOW_DAYS, WINDOW_DAYS + 1)]
+    # --- טוען קונפיג ---
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
 
+    currency = cfg.get("currency", "ILS")
+    adults = int(cfg.get("adults", 1))
+    r = cfg.get("route", {})
+    origin = r["origin"]
+    destination = r["destination"]
+    depart_center = r["depart_center_date"]
+    depart_win = int(r.get("depart_window_days", 3))
+    return_center = r["return_center_date"]
+    return_win = int(r.get("return_window_days", 3))
+    max_price = float(r["max_price"])
+    airline = (r.get("airline") or "").strip()
+    min_stay = int(r.get("min_stay_days", 0))
+    max_stay = int(r.get("max_stay_days", 3650))  # ברירת מחדל: בלי מגבלה
+
+    depart_days = date_list(depart_center, depart_win)
+    return_days = date_list(return_center, return_win)
+
+    token = get_amadeus_token()
     best = None
-    for d in days:
-        try:
-            offers = search_day(ORIGIN, DESTINATION, d, adults=ADULTS, currency=CURRENCY)
-        except Exception as e:
-            print(f"⚠️ שגיאה ביום {d}: {e}")
-            continue
 
-        for offer in offers:
-            if not is_offer_on_airline(offer, FILTER_AIRLINE):
+    for d_out in depart_days:
+        d_out_dt = datetime.fromisoformat(d_out)
+        for d_back in return_days:
+            d_back_dt = datetime.fromisoformat(d_back)
+            stay = (d_back_dt - d_out_dt).days
+            if stay < min_stay or stay > max_stay:
                 continue
-            price_str = offer.get("price", {}).get("grandTotal")
-            if not price_str:
-                continue
-            price = float(price_str)
-            if best is None or price < best["price"]:
-                best = {"date": d, "price": price}
+            if d_back_dt <= d_out_dt:
+                continue  # לא חוזרים לפני שיוצאים
 
-    if best and best["price"] <= MAX_PRICE:
-        subject = "✈️ נמצא מחיר נמוך באל-על!"
+            try:
+                offers = amadeus_roundtrip_offers(
+                    token, origin, destination, d_out, d_back, adults=adults, currency=currency
+                )
+            except Exception as e:
+                print(f"⚠️ שגיאה בצירוף {d_out}→{d_back}: {e}")
+                continue
+
+            for offer in offers:
+                if not is_offer_on_airline(offer, airline):
+                    continue
+                price_str = offer.get("price", {}).get("grandTotal")
+                if not price_str:
+                    continue
+                price = float(price_str)
+                if best is None or price < best["price"]:
+                    best = {
+                        "depart": d_out,
+                        "return": d_back,
+                        "price": price,
+                        "currency": currency
+                    }
+
+    if best and best["price"] <= max_price:
+        subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
         body = (
-            f"מסלול: {ORIGIN} → {DESTINATION}\n"
-            f"תאריך: {best['date']}\n"
-            f"מחיר: {best['price']:.0f} {CURRENCY} (סף: {MAX_PRICE:.0f} {CURRENCY})\n"
-            f"הודעה זו נשלחה אוטומטית מהבוט ב-GitHub Actions."
+            f"מסלול: {origin} ⇄ {destination}\n"
+            f"תאריכים: יציאה {best['depart']} | חזרה {best['return']}\n"
+            f"מחיר כולל: {best['price']:.0f} {best['currency']} (סף: {max_price:.0f} {currency})\n"
+            f"נוסעים: {adults} מבוגר/ים\n"
+            f"\nנשלח אוטומטית מהבוט (GitHub Actions)."
         )
         send_email(subject, body)
         print("✅ נשלחה התראה במייל:", best)
     else:
-        print("ℹ️ לא נמצא מחיר נמוך מהסף. Best:", best)
+        print("ℹ️ לא נמצאה עסקה מתחת לסף. Best:", best)
 
 if __name__ == "__main__":
     main()
