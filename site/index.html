@@ -9,11 +9,21 @@
 <body>
   <main class="container">
     <h1>✈️ Flight Alert Dashboard</h1>
+
     <div id="status" class="card">טוען נתונים…</div>
+
     <div id="best" class="card hidden"></div>
+
+    <div class="card">
+      <h3>היסטוריה</h3>
+      <canvas id="chart" width="720" height="280" style="width:100%;max-width:720px;"></canvas>
+      <div id="historyTable" class="table"></div>
+    </div>
+
     <div id="details" class="card hidden"></div>
+
     <footer>
-      <small>נבנה ע״י GitHub Actions · מעודכן מ-<code>results.json</code></small>
+      <small>נבנה ע״י GitHub Actions · מעודכן מ-<code>results.json</code> / <code>history.json</code></small>
     </footer>
   </main>
   <script src="./app.js"></script>
