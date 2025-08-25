@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, date
-import os, smtplib, ssl, requests, yaml, sys, traceback
+import os, smtplib, ssl, requests, yaml, sys, traceback, time
 from email.message import EmailMessage
 
 # ---------- Email ----------
@@ -55,10 +55,9 @@ def get_amadeus_token():
     data = {"grant_type": "client_credentials", "client_id": cid, "client_secret": csec}
     r = requests.post(url, data=data, timeout=30)
     r.raise_for_status()
-    j = r.json()
-    token = j.get("access_token")
+    token = r.json().get("access_token")
     if not token:
-        raise RuntimeError(f"לא התקבל access_token מאמדאוס: {j}")
+        raise RuntimeError("לא התקבל access_token מאמדאוס.")
     return token
 
 def amadeus_roundtrip_offers(token, origin, destination, depart_date, return_date, adults=1, currency="ILS"):
@@ -129,18 +128,47 @@ def main():
     depart_days = date_list(depart_center, depart_win)
     return_days = date_list(return_center, return_win)
 
+    total = len(depart_days) * len(return_days)
+    print(f"⏱️ נבדוק עד {total} צירופים (יציאה×חזרה).")
+
     token = get_amadeus_token()
+
+    # דד-ליין פנימי כדי לא להתקע (4 דק')
+    deadline = time.monotonic() + 240
+    checked = 0
 
     best = None
     for d_out in depart_days:
         d_out_dt = datetime.fromisoformat(d_out)
         for d_back in return_days:
+            if time.monotonic() > deadline:
+                print("⏹️ עצרנו בגלל limit של 4 דקות כדי לא להיתקע.")
+                # יציאה נקייה מהפונקציה
+                if best and best["price"] <= max_price:
+                    subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
+                    body = (
+                        f"מסלול: {origin} ⇄ {destination}\n"
+                        f"תאריכים: יציאה {best['depart']} | חזרה {best['return']}\n"
+                        f"מחיר כולל: {best['price']:.0f} {best['currency']} (סף: {max_price:.0f} {currency})\n"
+                        f"נוסעים: {adults} מבוגר/ים\n"
+                        f"\nנשלח אוטומטית מהבוט (GitHub Actions)."
+                    )
+                    send_email(subject, body)
+                    print("✅ נשלחה התראה במייל (לפני דד-ליין).")
+                else:
+                    print("ℹ️ לא נמצאה עסקה מתחת לסף עד הדד-ליין.")
+                return
+
             d_back_dt = datetime.fromisoformat(d_back)
             stay = (d_back_dt - d_out_dt).days
             if d_back_dt <= d_out_dt:
                 continue
             if stay < min_stay or stay > max_stay:
                 continue
+
+            checked += 1
+            if checked % 5 == 0 or checked == 1:
+                print(f"…מתקדם: {checked}/{total} (כעת: {d_out}→{d_back})")
 
             try:
                 offers = amadeus_roundtrip_offers(
@@ -164,6 +192,20 @@ def main():
                         "price": price,
                         "currency": currency
                     }
+                # יציאה מוקדמת אם יש מחיר מתחת לסף
+                if best and best["price"] <= max_price:
+                    print(f"🎯 נמצא מחיר מתחת לסף: {best['depart']}→{best['return']} ({best['price']} {currency}) — יוצאים מוקדם.")
+                    subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
+                    body = (
+                        f"מסלול: {origin} ⇄ {destination}\n"
+                        f"תאריכים: יציאה {best['depart']} | חזרה {best['return']}\n"
+                        f"מחיר כולל: {best['price']:.0f} {best['currency']} (סף: {max_price:.0f} {currency})\n"
+                        f"נוסעים: {adults} מבוגר/ים\n"
+                        f"\nנשלח אוטומטית מהבוט (GitHub Actions)."
+                    )
+                    send_email(subject, body)
+                    print("✅ נשלחה התראה במייל (יציאה מוקדמת).")
+                    return
 
     if best:
         print(f"BEST found: {origin} ⇄ {destination} | {best['depart']} → {best['return']} | {best['price']} {best['currency']}")
