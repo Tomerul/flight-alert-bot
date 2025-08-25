@@ -86,7 +86,37 @@ def amadeus_roundtrip_offers(token, origin, destination, depart_date, return_dat
     r.raise_for_status()
     return r.json().get("data", []) or []
 
-# ---------- Helpers ----------
+# ---------- Helpers (פרטים עשירים להצעה + היסטוריה) ----------
+import re
+
+def parse_iso_duration(dur):
+    # "PT10H5M" -> דקות כוללות
+    h = m = 0
+    if not isinstance(dur, str):
+        return 0
+    mH = re.search(r'(\d+)H', dur)
+    mM = re.search(r'(\d+)M', dur)
+    if mH: h = int(mH.group(1))
+    if mM: m = int(mM.group(1))
+    return h*60 + m
+
+def offer_details(offer):
+    airlines = set()
+    total_connections = 0
+    total_minutes = 0
+    for itin in (offer.get("itineraries") or []):
+        total_minutes += parse_iso_duration(itin.get("duration"))
+        segs = itin.get("segments") or []
+        total_connections += max(0, len(segs) - 1)
+        for s in segs:
+            cc = s.get("carrierCode")
+            if cc: airlines.add(cc)
+    return {
+        "airlines": sorted(airlines),
+        "connections": total_connections,
+        "total_duration_minutes": total_minutes
+    }
+
 def is_offer_on_airline(offer, airline_code):
     if not airline_code:
         return True
@@ -131,6 +161,21 @@ def write_results_json(origin, destination, adults, currency,
         json.dump(summary, f, ensure_ascii=False, indent=2)
     print("📝 wrote results.json")
 
+def append_history(entry):
+    hist_path = "history.json"
+    try:
+        history = []
+        if os.path.exists(hist_path):
+            with open(hist_path, "r", encoding="utf-8") as f:
+                history = json.load(f) or []
+        history.append(entry)
+        history = history[-200:]  # שומר אחרונים
+        with open(hist_path, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        print(f"🧾 appended to history.json (len: {len(history)})")
+    except Exception as e:
+        print("⚠️ history append failed:", e)
+
 # ---------- Main ----------
 def main():
     print("▶️ התחלת ריצה:", datetime.utcnow().isoformat() + "Z")
@@ -170,10 +215,20 @@ def main():
         for d_back in return_days:
             if time.monotonic() > deadline:
                 print("⏹️ עצרנו בגלל limit של 4 דקות כדי לא להיתקע.")
-                # כתיבת תוצאות לפני יציאה
+                # כתיבת תוצאות והיסטוריה לפני יציאה
                 write_results_json(origin, destination, adults, currency,
                                    depart_center, depart_win, return_center, return_win,
                                    min_stay, max_stay, best, max_price)
+                append_history({
+                    "ts": datetime.utcnow().isoformat() + "Z",
+                    "origin": origin, "destination": destination,
+                    "depart": best["depart"] if best else None,
+                    "return": best["return"] if best else None,
+                    "price": best["price"] if best else None,
+                    "currency": currency,
+                    "threshold": max_price,
+                    "below_threshold": bool(best and best["price"] <= max_price)
+                })
                 # אם כבר יש מתחת לסף — שלח מייל לפני היציאה
                 if best and best["price"] <= max_price:
                     subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
@@ -216,20 +271,28 @@ def main():
                 if not price_str:
                     continue
                 price = float(price_str)
+                det = offer_details(offer)
                 if best is None or price < best["price"]:
                     best = {
                         "depart": d_out,
                         "return": d_back,
                         "price": price,
-                        "currency": currency
+                        "currency": currency,
+                        **det
                     }
                 # יציאה מוקדמת אם יש מחיר מתחת לסף
                 if best and best["price"] <= max_price:
                     print(f"🎯 נמצא מחיר מתחת לסף: {best['depart']}→{best['return']} ({best['price']} {currency}) — יוצאים מוקדם.")
-                    # כתיבת תוצאות + שליחת מייל לפני יציאה
                     write_results_json(origin, destination, adults, currency,
                                        depart_center, depart_win, return_center, return_win,
                                        min_stay, max_stay, best, max_price)
+                    append_history({
+                        "ts": datetime.utcnow().isoformat() + "Z",
+                        "origin": origin, "destination": destination,
+                        "depart": best["depart"], "return": best["return"],
+                        "price": best["price"], "currency": currency,
+                        "threshold": max_price, "below_threshold": True
+                    })
                     subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
                     body = (
                         f"מסלול: {origin} ⇄ {destination}\n"
@@ -261,10 +324,20 @@ def main():
     else:
         print("ℹ️ לא נמצאה עסקה מתחת לסף.")
 
-    # כתיבת results.json בסיום הריצה (תמיד)
+    # כתיבת results.json + הוספת שורה להיסטוריה (תמיד)
     write_results_json(origin, destination, adults, currency,
                        depart_center, depart_win, return_center, return_win,
                        min_stay, max_stay, best, max_price)
+    append_history({
+        "ts": datetime.utcnow().isoformat() + "Z",
+        "origin": origin, "destination": destination,
+        "depart": best["depart"] if best else None,
+        "return": best["return"] if best else None,
+        "price": best["price"] if best else None,
+        "currency": currency,
+        "threshold": max_price,
+        "below_threshold": bool(best and best["price"] <= max_price)
+    })
 
 if __name__ == "__main__":
     try:
