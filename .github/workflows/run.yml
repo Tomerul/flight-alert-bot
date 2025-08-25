@@ -2,8 +2,8 @@ name: flight-alert-schedule
 
 on:
   schedule:
-    - cron: "0 */2 * * *"   # ירוץ כל שעתיים (לפי UTC)
-  workflow_dispatch: {}      # מאפשר להריץ ידנית
+    - cron: "0 */2 * * *"   # ירוץ כל שעתיים (UTC)
+  workflow_dispatch: {}      # להרצה ידנית
 
 jobs:
   run:
@@ -18,30 +18,13 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: Debug workspace
-        env:
-          HAS_EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-          HAS_EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
-          HAS_EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          HAS_EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          HAS_EMAIL_TO:   ${{ secrets.EMAIL_TO }}
-          HAS_AMADEUS_API_KEY: ${{ secrets.AMADEUS_API_KEY }}
-          HAS_AMADEUS_API_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
+      - name: Show workspace
         run: |
-          echo "Python version:" && python --version
-          echo "Repo files:" && ls -la
-          echo "config.yaml exists?" && { [ -f config.yaml ] && echo "✅ yes" || echo "❌ no"; }
+          echo "Files:" && ls -la
+          echo "Python:" && python --version
+          echo "Has config.yaml?" && { [ -f config.yaml ] && echo "✅ yes" || echo "❌ no"; }
 
-          [ -z "$HAS_EMAIL_HOST" ] && echo "❌ secret EMAIL_HOST not set" || echo "✅ EMAIL_HOST set"
-          [ -z "$HAS_EMAIL_PORT" ] && echo "❌ secret EMAIL_PORT not set" || echo "✅ EMAIL_PORT set"
-          [ -z "$HAS_EMAIL_USER" ] && echo "❌ secret EMAIL_USER not set" || echo "✅ EMAIL_USER set"
-          [ -z "$HAS_EMAIL_PASS" ] && echo "❌ secret EMAIL_PASS not set" || echo "✅ EMAIL_PASS set"
-          [ -z "$HAS_EMAIL_TO" ]   && echo "❌ secret EMAIL_TO not set"   || echo "✅ EMAIL_TO set"
-          [ -z "$HAS_AMADEUS_API_KEY" ]    && echo "❌ AMADEUS_API_KEY not set"    || echo "✅ AMADEUS_API_KEY set"
-          [ -z "$HAS_AMADEUS_API_SECRET" ] && echo "❌ AMADEUS_API_SECRET not set" || echo "✅ AMADEUS_API_SECRET set"
-
-      - name: Run main.py
-        run: python main.py
+      - name: Run bot
         env:
           EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
           EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
@@ -51,3 +34,4 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           AMADEUS_API_KEY: ${{ secrets.AMADEUS_API_KEY }}
           AMADEUS_API_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
+        run: python main.py
