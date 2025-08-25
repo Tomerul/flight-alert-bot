@@ -2,17 +2,22 @@ name: flight-alert-schedule
 
 on:
   schedule:
-    - cron: "0 */2 * * *"   # רץ כל שעתיים (ב-UTC)
-  workflow_dispatch: {}      # כפתור להרצה ידנית
+    - cron: "0 */2 * * *"   # ירוץ כל שעתיים (לפי UTC)
+  workflow_dispatch: {}      # מאפשר להריץ ידנית
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
       - name: Debug workspace
         env:
           HAS_EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
@@ -35,8 +40,6 @@ jobs:
           [ -z "$HAS_AMADEUS_API_KEY" ]    && echo "❌ AMADEUS_API_KEY not set"    || echo "✅ AMADEUS_API_KEY set"
           [ -z "$HAS_AMADEUS_API_SECRET" ] && echo "❌ AMADEUS_API_SECRET not set" || echo "✅ AMADEUS_API_SECRET set"
 
-      - name: Install deps
-        run: pip install -r requirements.txt
       - name: Run main.py
         run: python main.py
         env:
