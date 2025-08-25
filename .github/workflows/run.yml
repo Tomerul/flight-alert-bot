@@ -3,11 +3,13 @@ name: flight-alert-schedule
 on:
   schedule:
     - cron: "0 */2 * * *"   # ירוץ כל שעתיים (UTC)
-  workflow_dispatch: {}      # להרצה ידנית
+  workflow_dispatch: {}      # מאפשר להריץ ידנית
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 8       # חותך ריצות ארוכות מדי
+
     steps:
       - uses: actions/checkout@v4
 
@@ -20,7 +22,7 @@ jobs:
 
       - name: Show workspace
         run: |
-          echo "Files:" && ls -la
+          echo "Files in repo:" && ls -la
           echo "Python:" && python --version
           echo "Has config.yaml?" && { [ -f config.yaml ] && echo "✅ yes" || echo "❌ no"; }
 
