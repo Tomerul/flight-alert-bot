@@ -29,7 +29,7 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: Run bot (generate results.json)
+      - name: Run bot (generate results.json + history.json)
         env:
           EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
           EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
@@ -45,8 +45,8 @@ jobs:
         run: |
           mkdir -p dist
           cp -r site/* dist/
-          # results.json מהבוט
           cp results.json dist/ || echo '{"error":"no results.json"}' > dist/results.json
+          cp history.json dist/  || echo '[]' > dist/history.json
           echo "✅ dist prepared:"
           ls -la dist
 
@@ -56,5 +56,4 @@ jobs:
           path: ./dist
 
       - name: Deploy to GitHub Pages
-        id: deployment
         uses: actions/deploy-pages@v4
