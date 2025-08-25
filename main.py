@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, date
-import os, smtplib, ssl, requests, yaml, sys, traceback, time
+import os, smtplib, ssl, requests, yaml, sys, traceback, time, json
 from email.message import EmailMessage
 
 # ---------- Email ----------
@@ -104,6 +104,33 @@ def date_list(center_iso, window_days):
     return [(center + timedelta(days=off)).strftime("%Y-%m-%d")
             for off in range(-window_days, window_days + 1)]
 
+def write_results_json(origin, destination, adults, currency,
+                       depart_center, depart_win, return_center, return_win,
+                       min_stay, max_stay, best, max_price):
+    summary = {
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "route": {
+            "origin": origin,
+            "destination": destination,
+            "adults": adults,
+            "currency": currency
+        },
+        "search": {
+            "depart_center_date": depart_center,
+            "depart_window_days": depart_win,
+            "return_center_date": return_center,
+            "return_window_days": return_win,
+            "min_stay_days": min_stay,
+            "max_stay_days": max_stay
+        },
+        "best": best,  # dict או None
+        "threshold": max_price,
+        "below_threshold": bool(best and best["price"] <= max_price)
+    }
+    with open("results.json", "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    print("📝 wrote results.json")
+
 # ---------- Main ----------
 def main():
     print("▶️ התחלת ריצה:", datetime.utcnow().isoformat() + "Z")
@@ -143,7 +170,11 @@ def main():
         for d_back in return_days:
             if time.monotonic() > deadline:
                 print("⏹️ עצרנו בגלל limit של 4 דקות כדי לא להיתקע.")
-                # יציאה נקייה מהפונקציה
+                # כתיבת תוצאות לפני יציאה
+                write_results_json(origin, destination, adults, currency,
+                                   depart_center, depart_win, return_center, return_win,
+                                   min_stay, max_stay, best, max_price)
+                # אם כבר יש מתחת לסף — שלח מייל לפני היציאה
                 if best and best["price"] <= max_price:
                     subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
                     body = (
@@ -195,6 +226,10 @@ def main():
                 # יציאה מוקדמת אם יש מחיר מתחת לסף
                 if best and best["price"] <= max_price:
                     print(f"🎯 נמצא מחיר מתחת לסף: {best['depart']}→{best['return']} ({best['price']} {currency}) — יוצאים מוקדם.")
+                    # כתיבת תוצאות + שליחת מייל לפני יציאה
+                    write_results_json(origin, destination, adults, currency,
+                                       depart_center, depart_win, return_center, return_win,
+                                       min_stay, max_stay, best, max_price)
                     subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
                     body = (
                         f"מסלול: {origin} ⇄ {destination}\n"
@@ -225,6 +260,11 @@ def main():
         print("✅ נשלחה התראה במייל.")
     else:
         print("ℹ️ לא נמצאה עסקה מתחת לסף.")
+
+    # כתיבת results.json בסיום הריצה (תמיד)
+    write_results_json(origin, destination, adults, currency,
+                       depart_center, depart_win, return_center, return_win,
+                       min_stay, max_stay, best, max_price)
 
 if __name__ == "__main__":
     try:
