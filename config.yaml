@@ -3,8 +3,8 @@ adults: 2
 route:
   origin: TLV
   destination: HKT
-  depart_center_date: '2026-02-15'
-  depart_window_days: 15
+  depart_center_date: '2025-12-20'
+  depart_window_days: 14
   return_center_date: AUTO
   return_window_days: AUTO
   max_price: 999999.0
