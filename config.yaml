@@ -3,22 +3,24 @@ adults: 2
 
 route:
   origin: TLV
-  destination: HKT   # פוקט (Phuket). קוד IATA לעיר/שדה: HKT
+  destination: HKT
 
-  # יציאה: תאריך מרכזי וטווח ±ימים
+  # אתה משנה רק את זה:
   depart_center_date: "2025-12-20"
-  depart_window_days: 2
 
-  # חזרה: תאריך מרכזי וטווח ±ימים
-  return_center_date: "2026-05-30"
-  return_window_days: 2
+  # שבועיים קדימה/אחורה
+  depart_window_days: 15
 
-  # סף להתראה (החיפוש עצמו לא תלוי בזה)
-  max_price: 7000
+  # אל תשנה — הקוד מחשב אוטומטית
+  return_center_date: "AUTO"
+  return_window_days: "AUTO"
+
+  # סף התראה (החיפוש עצמו לא תלוי בזה)
+  max_price: 999999
 
   # בלי סינון חברת תעופה (בדיקה של כל החברות)
   # airline: ""
 
-  # אילוץ שהייה מינ'/מקס' (ימים)
+  # שהייה מינ'/מקס'
   min_stay_days: 11
   max_stay_days: 14
