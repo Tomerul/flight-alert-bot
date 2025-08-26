@@ -2,7 +2,7 @@ name: flight-alert-schedule
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # פעם ביום ב-00:00 UTC
+    - cron: "0 4 * * *"   # פעם ביום ב-00:00 UTC
   workflow_dispatch: {}    # מאפשר להריץ ידנית
 
 permissions:
