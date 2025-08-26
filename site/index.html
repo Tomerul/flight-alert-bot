@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Flight Alert Dashboard</title>
   <link rel="stylesheet" href="./styles.css" />
-  <!-- Chart.js לציור גרפים -->
+  <!-- Chart.js לגרפים -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -27,6 +27,33 @@
     </div>
 
     <div id="details" class="card hidden"></div>
+
+    <!-- ===== טופס עדכון והרצה מהקליינט ===== -->
+    <div class="card">
+      <h3>עדכון הגדרות מהאפליקציה</h3>
+      <form id="cfgForm">
+        <div class="grid">
+          <label>מוצא <input name="origin" value="TLV" required></label>
+          <label>יעד <input name="destination" value="HKT" required></label>
+          <label>נוסעים (מבוגרים) <input name="adults" type="number" min="1" value="2" required></label>
+          <label>מטבע <input name="currency" value="ILS" required></label>
+          <label>תאריך יציאה מרכזי <input name="depart_center_date" type="date" required></label>
+          <label>חלון יציאה (± ימים) <input name="depart_window_days" type="number" min="0" value="14" required></label>
+          <label>שהייה מינ׳ <input name="min_stay_days" type="number" min="1" value="11" required></label>
+          <label>שהייה מקס׳ <input name="max_stay_days" type="number" min="1" value="14" required></label>
+          <label>סינון חברת תעופה (אופציונלי) <input name="airline" placeholder="ללא = הכל"></label>
+          <label>סביבת Amadeus
+            <select name="amadeus_env">
+              <option value="test">test</option>
+              <option value="prod">prod</option>
+            </select>
+          </label>
+        </div>
+        <button type="submit">שמור והריץ</button>
+        <div id="saveMsg" class="dim" style="margin-top:8px;"></div>
+      </form>
+      <p class="dim" style="margin-top:8px">הטופס מפעיל את ה-workflow <code>update-config-and-run</code> דרך Cloudflare Worker.</p>
+    </div>
 
     <footer>
       <small>נבנה ע״י GitHub Actions · מעודכן מ-<code>results.json</code> / <code>history.json</code></small>
