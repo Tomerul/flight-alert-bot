@@ -7,6 +7,13 @@
   const histTable = $("historyTable");
   const histInfo = $("histInfo");
   const downloadCsvBtn = $("downloadCsv");
+  const form = $("cfgForm");
+  const saveMsg = $("saveMsg");
+
+  const WORKER_URL = "https://flight-alert-bridge.tomerul85.workers.dev"; // <<< להחליף
+  const OWNER = "tomerul";  // <<< להחליף
+  const REPO  = "flight-alert-bot";   // שם הריפו
+  const APP_SHARED_KEY = "FlightSecret123"; // <<< אותו ערך כמו ב-Worker env
 
   // --- קריאה לקבצים (ללא cache) ---
   const fetchJSON = async (path, fallback) => {
@@ -19,27 +26,23 @@
     }
   };
 
-  // --- פערי אבטחה בדפדפן? מוודא מספר ל-ILS ---
   const fmt = (v) => (v == null ? "—" : Number(v).toFixed(0));
 
-  // --- בניית לינקי חיפוש קנייה ---
+  // --- לינקי חיפוש קנייה ---
   function buildGoogleFlightsLink(origin, destination, depart, ret, adults, currency) {
     const hl = "he";
     const curr = (currency || "ILS");
-    // פורמט: TLV.HKT.YYYY-MM-DD*HKT.TLV.YYYY-MM-DD
     const flt = `${origin}.${destination}.${depart}*${destination}.${origin}.${ret}`;
     return `https://www.google.com/travel/flights?hl=${hl}&curr=${curr}&flt=${encodeURIComponent(flt)};tt=m;ad=${adults || 1}`;
   }
   function buildSkyscannerLink(origin, destination, depart, ret, adults) {
-    // פורמט: /transport/flights/tlv/hkt/2025-12-20/2026-01-02/?adultsv2=2
     return `https://www.skyscanner.com/transport/flights/${origin.toLowerCase()}/${destination.toLowerCase()}/${depart}/${ret}/?adultsv2=${adults || 1}`;
   }
   function buildKayakLink(origin, destination, depart, ret, adults) {
-    // פורמט kayak: /flights/TLV-HKT/2025-12-20/2026-01-02?adults=2
     return `https://www.kayak.com/flights/${origin}-${destination}/${depart}/${ret}?adults=${adults || 1}`;
   }
 
-  // --- ציור גרף עם Chart.js ---
+  // --- גרף Chart.js ---
   let chart;
   function renderChart(points) {
     if (chart) { chart.destroy(); }
@@ -48,14 +51,7 @@
     const ctx = chartEl.getContext("2d");
     chart = new Chart(ctx, {
       type: "line",
-      data: {
-        labels,
-        datasets: [{
-          label: "מחיר (ILS)",
-          data,
-          tension: 0.25
-        }]
-      },
+      data: { labels, datasets: [{ label: "מחיר (ILS)", data, tension: 0.25 }] },
       options: {
         maintainAspectRatio: false,
         scales: {
@@ -64,18 +60,14 @@
         },
         plugins: {
           legend: { labels: { color: "#e9eef6" } },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => ` ${fmt(ctx.parsed.y)} ILS`
-            }
-          }
+          tooltip: { callbacks: { label: (ctx) => ` ${fmt(ctx.parsed.y)} ILS` } }
         },
         elements: { point: { radius: 3 } }
       }
     });
   }
 
-  // --- יצוא CSV מהיסטוריה ---
+  // --- יצוא CSV ---
   function exportCsv(history) {
     const rows = [["timestamp","origin","destination","depart","return","price","currency","below_threshold"]];
     for (const h of history) {
@@ -157,7 +149,6 @@
     const history = (historyRaw || []).filter(x => x && x.ts);
     histInfo.textContent = history.length ? `סך רשומות: ${history.length}` : "אין נתוני היסטוריה עדיין.";
 
-    // טבלת היסטוריה
     if (history.length) {
       const rows = history.slice().reverse().map(h => `
         <tr>
@@ -182,7 +173,6 @@
       histTable.innerHTML = `<div class="dim">אין נתונים עדיין – בריצה הבאה ההיסטוריה תתחיל להתמלא.</div>`;
     }
 
-    // גרף—מחיר לפי זמן (לוקח את כל הרשומות שיש להן price)
     const points = history
       .filter(x => typeof x.price === "number")
       .map(x => ({ t: new Date(x.ts).getTime(), y: x.price }))
@@ -191,15 +181,51 @@
     if (points.length >= 2) {
       renderChart(points);
     } else {
-      // אם אין מספיק נקודות לגרף—ננקה קנבס
       const ctx = chartEl.getContext("2d");
       ctx.clearRect(0,0,chartEl.width,chartEl.height);
       ctx.fillStyle = "#a9b4c3";
       ctx.fillText("אין מספיק נתונים לגרף עדיין.", 10, 20);
     }
 
-    // הורדת CSV
     downloadCsvBtn.addEventListener("click", () => exportCsv(history));
+
+    // ===== שליחת הטופס ל-Worker (הפעלה מהקליינט) =====
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      saveMsg.textContent = "שולח בקשה…";
+      const fd = new FormData(form);
+      const inputs = {
+        origin:             fd.get("origin"),
+        destination:        fd.get("destination"),
+        adults:             String(fd.get("adults") || "1"),
+        currency:           fd.get("currency") || "ILS",
+        depart_center_date: fd.get("depart_center_date"),
+        depart_window_days: String(fd.get("depart_window_days") || "0"),
+        min_stay_days:      String(fd.get("min_stay_days") || "1"),
+        max_stay_days:      String(fd.get("max_stay_days") || "30"),
+        airline:            (fd.get("airline") || "").trim(),
+        amadeus_env:        fd.get("amadeus_env") || "test"
+      };
+
+      try {
+        const r = await fetch(WORKER_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-app-key": APP_SHARED_KEY
+          },
+          body: JSON.stringify({ owner: OWNER, repo: REPO, inputs })
+        });
+        if (!r.ok) {
+          const txt = await r.text();
+          throw new Error(txt || `HTTP ${r.status}`);
+        }
+        saveMsg.textContent = "✅ הבקשה נשלחה. ה-Workflow ירוץ ויעדכן את הדשבורד בסיום.";
+      } catch (err) {
+        console.error(err);
+        saveMsg.textContent = "❌ שגיאה בשליחה: " + String(err);
+      }
+    });
 
   } catch (err) {
     status.innerHTML = `<span class="badge err">שגיאה</span> ${String(err)}`;
