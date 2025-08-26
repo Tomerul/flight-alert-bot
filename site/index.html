@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Flight Alert Dashboard</title>
   <link rel="stylesheet" href="./styles.css" />
-  <!-- Chart.js לגרפים -->
+  <!-- Chart.js + time adapter -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 </head>
 <body>
   <main class="container">
@@ -54,11 +55,18 @@
       </form>
       <p class="dim" style="margin-top:8px">הטופס מפעיל את ה-workflow <code>update-config-and-run</code> דרך Cloudflare Worker.</p>
     </div>
-
-    <footer>
-      <small>נבנה ע״י GitHub Actions · מעודכן מ-<code>results.json</code> / <code>history.json</code></small>
-    </footer>
   </main>
+
+  <!-- שכבת ספינר בזמן שה-Workflow רץ -->
+  <div id="runOverlay" class="overlay hidden">
+    <div class="spinner"></div>
+    <div class="overlay-text">
+      מריץ את ה-workflow… <span id="runState">מכין…</span><br/>
+      <small>הדף יתרענן אוטומטית בסיום</small>
+      <div><a id="runLink" href="#" target="_blank" rel="noopener" class="btn btn-outline hidden" style="margin-top:10px;">לוגים בגיטהאב</a></div>
+    </div>
+  </div>
+
   <script src="./app.js"></script>
 </body>
 </html>
