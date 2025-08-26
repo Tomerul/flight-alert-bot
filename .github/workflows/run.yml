@@ -2,8 +2,8 @@ name: flight-alert-schedule
 
 on:
   schedule:
-    - cron: "0 */2 * * *"   # כל שעתיים (UTC)
-  workflow_dispatch: {}      # להרצה ידנית
+    - cron: "0 0 * * *"   # פעם ביום ב-00:00 UTC
+  workflow_dispatch: {}    # מאפשר להריץ ידנית
 
 permissions:
   contents: read
@@ -31,6 +31,7 @@ jobs:
 
       - name: Run bot (generate results.json + history.json)
         env:
+          AMADEUS_ENV: ${{ secrets.AMADEUS_ENV }} # השאר ריק/לא להגדיר = TEST; להגדיר ל-"prod" אם צריך פרודקשן
           EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
           EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
@@ -45,7 +46,7 @@ jobs:
         run: |
           mkdir -p dist
           cp -r site/* dist/
-          cp results.json dist/ || echo '{"error":"no results.json"}' > dist/results.json
+          cp results.json dist/  || echo '{"error":"no results.json"}' > dist/results.json
           cp history.json dist/  || echo '[]' > dist/history.json
           echo "✅ dist prepared:"
           ls -la dist
