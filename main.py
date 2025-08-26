@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, date
-import os, smtplib, ssl, requests, yaml, sys, traceback, time, json
+import os, smtplib, ssl, requests, yaml, sys, traceback, time, json, re
 from email.message import EmailMessage
 
-# ---------- Email ----------
+# =========================
+#   Email
+# =========================
 def send_email(subject: str, body: str):
     host = os.environ.get("EMAIL_HOST", "")
     port = int(os.environ.get("EMAIL_PORT", "465"))
@@ -26,7 +28,9 @@ def send_email(subject: str, body: str):
         server.login(user, password)
         server.send_message(msg)
 
-# ---------- Config ----------
+# =========================
+#   Config helpers
+# =========================
 def to_yyyy_mm_dd(value):
     """מחזיר YYYY-MM-DD גם אם value הוא str וגם אם הוא date/datetime"""
     if isinstance(value, str):
@@ -45,9 +49,25 @@ def load_config():
         raise ValueError("config.yaml לא תקין (חסר מפתח route או מבנה לא נכון).")
     return cfg
 
-# ---------- Amadeus ----------
+# =========================
+#   Amadeus env + API
+# =========================
+def amadeus_base_urls():
+    # AMADEUS_ENV: "test" (default) או "prod"
+    env = (os.environ.get("AMADEUS_ENV") or "test").strip().lower()
+    if env in ("prod", "production", "live"):
+        base = "https://api.amadeus.com"
+    else:
+        base = "https://test.api.amadeus.com"
+    return {
+        "token_url": f"{base}/v1/security/oauth2/token",
+        "offers_url": f"{base}/v2/shopping/flight-offers",
+        "env_name": "PRODUCTION" if base.endswith("amadeus.com") and "test" not in base else "TEST"
+    }
+
 def get_amadeus_token():
-    url = "https://test.api.amadeus.com/v1/security/oauth2/token"
+    urls = amadeus_base_urls()
+    url = urls["token_url"]
     cid = os.environ.get("AMADEUS_API_KEY", "")
     csec = os.environ.get("AMADEUS_API_SECRET", "")
     if not cid or not csec:
@@ -61,7 +81,8 @@ def get_amadeus_token():
     return token
 
 def amadeus_roundtrip_offers(token, origin, destination, depart_date, return_date, adults=1, currency="ILS"):
-    url = "https://test.api.amadeus.com/v2/shopping/flight-offers"
+    urls = amadeus_base_urls()
+    url = urls["offers_url"]
     payload = {
         "currencyCode": currency,
         "originDestinations": [
@@ -83,12 +104,14 @@ def amadeus_roundtrip_offers(token, origin, destination, depart_date, return_dat
     }
     headers = {"Authorization": f"Bearer {token}"}
     r = requests.post(url, json=payload, headers=headers, timeout=60)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        print(f"❌ offers {depart_date}->{return_date} failed [{r.status_code}] {r.text[:500]}")
+        r.raise_for_status()
     return r.json().get("data", []) or []
 
-# ---------- Helpers (פרטים עשירים להצעה + היסטוריה) ----------
-import re
-
+# =========================
+#   Offer parsing helpers
+# =========================
 def parse_iso_duration(dur):
     # "PT10H5M" -> דקות כוללות
     h = m = 0
@@ -128,6 +151,9 @@ def is_offer_on_airline(offer, airline_code):
                 return True
     return False
 
+# =========================
+#   Date helpers + outputs
+# =========================
 def date_list(center_iso, window_days):
     center_str = to_yyyy_mm_dd(center_iso)
     center = datetime.fromisoformat(center_str)
@@ -153,9 +179,10 @@ def write_results_json(origin, destination, adults, currency,
             "min_stay_days": min_stay,
             "max_stay_days": max_stay
         },
-        "best": best,  # dict או None
+        "best": best,
         "threshold": max_price,
-        "below_threshold": bool(best and best["price"] <= max_price)
+        "below_threshold": bool(best and best["price"] <= max_price),
+        "amadeus_env": amadeus_base_urls()["env_name"]
     }
     with open("results.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
@@ -169,16 +196,19 @@ def append_history(entry):
             with open(hist_path, "r", encoding="utf-8") as f:
                 history = json.load(f) or []
         history.append(entry)
-        history = history[-200:]  # שומר אחרונים
+        history = history[-200:]  # שומר רק אחרונים
         with open(hist_path, "w", encoding="utf-8") as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
         print(f"🧾 appended to history.json (len: {len(history)})")
     except Exception as e:
         print("⚠️ history append failed:", e)
 
-# ---------- Main ----------
+# =========================
+#   Main
+# =========================
 def main():
     print("▶️ התחלת ריצה:", datetime.utcnow().isoformat() + "Z")
+    print("Amadeus ENV:", amadeus_base_urls()["env_name"])
 
     cfg = load_config()
     print("DEBUG cfg loaded ok.")
@@ -188,20 +218,39 @@ def main():
     r = cfg["route"]
     origin = r["origin"]
     destination = r["destination"]
+
+    # --- קריאה פשוטה: מרכז יציאה + חלון (לפי הקונפיג) ---
     depart_center = to_yyyy_mm_dd(r["depart_center_date"])
-    depart_win = int(r["depart_window_days"])
-    return_center = to_yyyy_mm_dd(r["return_center_date"])
-    return_win = int(r["return_window_days"])
-    max_price = float(r["max_price"])
-    airline = (r.get("airline") or "").strip()
+    depart_win = int(r.get("depart_window_days", 0))
+
+    # שהייה מינ'/מקס'
     min_stay = int(r.get("min_stay_days", 0))
     max_stay = int(r.get("max_stay_days", 3650))
+
+    # --- AUTO: מרכז/חלון חזרה מחושבים אוטומטית ---
+    ret_center_raw = r.get("return_center_date")
+    if (ret_center_raw is None) or (isinstance(ret_center_raw, str) and ret_center_raw.strip().upper() == "AUTO"):
+        avg_stay = (min_stay + max_stay) // 2 if max_stay >= min_stay else 0
+        return_center = (datetime.fromisoformat(depart_center) + timedelta(days=avg_stay)).strftime("%Y-%m-%d")
+    else:
+        return_center = to_yyyy_mm_dd(ret_center_raw)
+
+    ret_win_raw = r.get("return_window_days")
+    if (ret_win_raw is None) or (isinstance(ret_win_raw, str) and ret_win_raw.strip().upper() == "AUTO"):
+        # מכסה את כל ההחזרות האפשריות לכל יציאה בטווח:
+        # אם חלון יציאה = W ושהייה מקס' = Smax, אז מספיק return_window_days = W + Smax
+        return_win = depart_win + max_stay
+    else:
+        return_win = int(ret_win_raw)
+
+    max_price = float(r["max_price"])
+    airline = (r.get("airline") or "").strip()
 
     depart_days = date_list(depart_center, depart_win)
     return_days = date_list(return_center, return_win)
 
     total = len(depart_days) * len(return_days)
-    print(f"⏱️ נבדוק עד {total} צירופים (יציאה×חזרה).")
+    print(f"⏱️ נבדוק עד {total} צירופים (יציאה×חזרה). (הקריאות בפועל רק לצירופים שעומדים בשהייה {min_stay}-{max_stay})")
 
     token = get_amadeus_token()
 
@@ -227,9 +276,9 @@ def main():
                     "price": best["price"] if best else None,
                     "currency": currency,
                     "threshold": max_price,
-                    "below_threshold": bool(best and best["price"] <= max_price)
+                    "below_threshold": bool(best and best["price"] <= max_price),
+                    "env": amadeus_base_urls()["env_name"]
                 })
-                # אם כבר יש מתחת לסף — שלח מייל לפני היציאה
                 if best and best["price"] <= max_price:
                     subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
                     body = (
@@ -253,8 +302,8 @@ def main():
                 continue
 
             checked += 1
-            if checked % 5 == 0 or checked == 1:
-                print(f"…מתקדם: {checked}/{total} (כעת: {d_out}→{d_back})")
+            if checked % 10 == 0 or checked == 1:
+                print(f"…מתקדם: {checked}/{total} (כעת: {d_out}→{d_back}, stay={stay})")
 
             try:
                 offers = amadeus_roundtrip_offers(
@@ -280,7 +329,6 @@ def main():
                         "currency": currency,
                         **det
                     }
-                # יציאה מוקדמת אם יש מחיר מתחת לסף
                 if best and best["price"] <= max_price:
                     print(f"🎯 נמצא מחיר מתחת לסף: {best['depart']}→{best['return']} ({best['price']} {currency}) — יוצאים מוקדם.")
                     write_results_json(origin, destination, adults, currency,
@@ -291,7 +339,8 @@ def main():
                         "origin": origin, "destination": destination,
                         "depart": best["depart"], "return": best["return"],
                         "price": best["price"], "currency": currency,
-                        "threshold": max_price, "below_threshold": True
+                        "threshold": max_price, "below_threshold": True,
+                        "env": amadeus_base_urls()["env_name"]
                     })
                     subject = "✈️ נמצא מחיר נמוך (הלוך-חזור)"
                     body = (
@@ -336,7 +385,8 @@ def main():
         "price": best["price"] if best else None,
         "currency": currency,
         "threshold": max_price,
-        "below_threshold": bool(best and best["price"] <= max_price)
+        "below_threshold": bool(best and best["price"] <= max_price),
+        "env": amadeus_base_urls()["env_name"]
     })
 
 if __name__ == "__main__":
