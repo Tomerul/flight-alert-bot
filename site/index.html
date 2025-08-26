@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Flight Alert Dashboard</title>
   <link rel="stylesheet" href="./styles.css" />
+  <!-- Chart.js לציור גרפים -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <main class="container">
@@ -16,36 +18,15 @@
 
     <div class="card">
       <h3>היסטוריה</h3>
-      <canvas id="chart" width="720" height="280" style="width:100%;max-width:720px;"></canvas>
+      <canvas id="priceChart" height="260"></canvas>
+      <div class="toolbar">
+        <button id="downloadCsv">הורד CSV</button>
+        <span class="dim" id="histInfo"></span>
+      </div>
       <div id="historyTable" class="table"></div>
     </div>
 
     <div id="details" class="card hidden"></div>
-
-    <div class="card">
-      <h3>עדכון הגדרות מהאפליקציה</h3>
-      <form id="cfgForm">
-        <div class="grid">
-          <label>מוצא <input name="origin" value="TLV" required></label>
-          <label>יעד <input name="destination" value="HKT" required></label>
-          <label>נוסעים (מבוגרים) <input name="adults" type="number" min="1" value="2" required></label>
-          <label>מטבע <input name="currency" value="ILS" required></label>
-          <label>תאריך יציאה מרכזי <input name="depart_center_date" type="date" required></label>
-          <label>חלון יציאה (± ימים) <input name="depart_window_days" type="number" min="0" value="14" required></label>
-          <label>שהייה מינ׳ <input name="min_stay_days" type="number" min="1" value="11" required></label>
-          <label>שהייה מקס׳ <input name="max_stay_days" type="number" min="1" value="14" required></label>
-          <label>סינון חברת תעופה (אופציונלי) <input name="airline" placeholder="ללא = הכל"></label>
-          <label>סביבת Amadeus
-            <select name="amadeus_env">
-              <option value="test">test</option>
-              <option value="prod">prod</option>
-            </select>
-          </label>
-        </div>
-        <button type="submit">שמור והריץ</button>
-        <div id="saveMsg" class="dim" style="margin-top:8px;"></div>
-      </form>
-    </div>
 
     <footer>
       <small>נבנה ע״י GitHub Actions · מעודכן מ-<code>results.json</code> / <code>history.json</code></small>
