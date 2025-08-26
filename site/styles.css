@@ -31,3 +31,17 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .btns { display:flex; flex-wrap: wrap; gap:8px; margin-top:8px; }
 .btn-primary { background: #0f2740; border-color: #1a3a5e; }
 .btn-outline { background: transparent; border-color: #37414f; }
+
+/* Overlay spinner */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999; text-align: center;
+}
+.spinner {
+  width: 56px; height: 56px; border: 6px solid rgba(255,255,255,.25);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 1s linear infinite; margin: 0 auto 12px auto;
+}
+.overlay-text { color: var(--text); }
+@keyframes spin { to { transform: rotate(360deg); } }
