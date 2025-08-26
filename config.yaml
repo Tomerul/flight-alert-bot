@@ -6,7 +6,7 @@ route:
   destination: HKT
 
   # אתה משנה רק את זה:
-  depart_center_date: "2025-12-20"
+  depart_center_date: "2026-01-15"
 
   # שבועיים קדימה/אחורה
   depart_window_days: 15
