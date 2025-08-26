@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Flight Alert Dashboard</title>
   <link rel="stylesheet" href="./styles.css" />
-  <!-- Chart.js + time adapter -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 </head>
@@ -13,13 +12,9 @@
   <main class="container">
     <h1>✈️ Flight Alert Dashboard</h1>
 
-    <!-- סטטוס כללי -->
     <div id="status" class="card">טוען נתונים…</div>
-
-    <!-- העסקה הטובה ביותר -->
     <div id="best" class="card hidden"></div>
 
-    <!-- היסטוריה + גרף -->
     <div class="card">
       <h3>היסטוריה</h3>
       <canvas id="priceChart" height="260"></canvas>
@@ -30,10 +25,8 @@
       <div id="historyTable" class="table"></div>
     </div>
 
-    <!-- פרטי החיפוש הנוכחי -->
     <div id="details" class="card hidden"></div>
 
-    <!-- טופס עדכון והרצה מהקליינט -->
     <div class="card">
       <h3>עדכון הגדרות מהאפליקציה</h3>
       <form id="cfgForm">
@@ -57,9 +50,7 @@
         <button type="submit">שמור והריץ</button>
         <div id="saveMsg" class="dim" style="margin-top:8px;"></div>
       </form>
-      <p class="dim" style="margin-top:8px">
-        הטופס מפעיל את ה-workflow <code>update-config-and-run</code> דרך Cloudflare Worker.
-      </p>
+      <p class="dim" style="margin-top:8px">הטופס מפעיל את ה-workflow <code>update-config-and-run</code> דרך Cloudflare Worker.</p>
     </div>
 
     <footer>
@@ -67,14 +58,17 @@
     </footer>
   </main>
 
-  <!-- שכבת ספינר בזמן שה-Workflow רץ -->
+  <!-- Overlay -->
   <div id="runOverlay" class="overlay hidden">
     <div>
       <div class="spinner"></div>
       <div class="overlay-text">
         מריץ את ה-workflow… <span id="runState">מכין…</span><br/>
         <small>הדף יתעדכן אוטומטית בסיום</small>
-        <div><a id="runLink" href="#" target="_blank" rel="noopener" class="btn btn-outline hidden" style="margin-top:10px;">לוגים בגיטהאב</a></div>
+        <div style="margin-top:10px;">
+          <a id="runLink" href="#" target="_blank" rel="noopener" class="btn btn-outline hidden">לוגים בגיטהאב</a>
+          <button id="closeOverlay" class="btn btn-outline" type="button" style="margin-inline-start:8px;">סגור</button>
+        </div>
       </div>
     </div>
   </div>
