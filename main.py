@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os, sys, json, time, traceback
+import os, sys, json, traceback
 from datetime import datetime, timedelta
 import requests
 
@@ -12,8 +12,7 @@ HISTORY_PATH = os.environ.get("HISTORY_PATH", "site/history.json")
 # -------------------- Utils --------------------
 
 def log(*a):
-    ts = datetime.utcnow().isoformat() + "Z"
-    print(ts, *a, flush=True)
+    print(datetime.utcnow().isoformat() + "Z", *a, flush=True)
 
 def load_yaml(path):
     import yaml
@@ -42,55 +41,29 @@ def append_history(entry):
 # -------------------- Amadeus --------------------
 
 def amadeus_token(client_id, client_secret, env="test"):
-    """
-    מחזיר (access_token, base_url) או מעלה חריגה עם פרטי השגיאה של אמדאוס.
-    """
     base = "https://test.api.amadeus.com" if env == "test" else "https://api.amadeus.com"
-
-    # לוג עוזר — לא חושף את הערכים עצמם
-    log(f"amadeus_token: env={env} base={base}")
-    log(f"amadeus_token: client_id_present={bool(client_id)} client_secret_present={bool(client_secret)}")
-
-    try:
-        r = requests.post(
-            f"{base}/v1/security/oauth2/token",
-            data={
-                "grant_type": "client_credentials",
-                "client_id": client_id,
-                "client_secret": client_secret,
-            },
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            },
-            timeout=25
-        )
-    except Exception as e:
-        log("amadeus_token network error:", repr(e))
-        raise
-
+    log(f"amadeus_token: env={env}, base={base}, id_present={bool(client_id)}, secret_present={bool(client_secret)}")
+    r = requests.post(
+        f"{base}/v1/security/oauth2/token",
+        data={"grant_type":"client_credentials","client_id":client_id,"client_secret":client_secret},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=25
+    )
     if not r.ok:
-        # נציג את גוף התגובה של אמדאוס כדי להבין את הסיבה (לרוב: invalid_client)
-        body = None
-        try:
-            body = r.json()
-        except Exception:
-            body = r.text[:500]
+        try: body = r.json()
+        except Exception: body = r.text[:500]
         log("amadeus_token HTTP error:", r.status_code, body)
         r.raise_for_status()
-
-    try:
-        token = r.json()["access_token"]
-    except Exception:
+    token = r.json().get("access_token")
+    if not token:
         log("amadeus_token parse error:", r.text[:500])
-        raise
+        raise RuntimeError("No access_token in Amadeus response")
     return token, base
 
 def simplify_offer(offer, origin, destination, currency, adults):
-    """Extract key fields from Amadeus flight-offer object."""
     price = float(offer.get("price", {}).get("grandTotal", "0") or 0)
     carriers = set()
-    depart_dt = ""
-    return_dt = ""
+    depart_dt, return_dt = "", ""
 
     itineraries = offer.get("itineraries", []) or []
     if len(itineraries) >= 1:
@@ -108,7 +81,6 @@ def simplify_offer(offer, origin, destination, currency, adults):
                 c = s.get("carrierCode")
                 if c: carriers.add(c)
 
-    # connections: לכל כיוון מספר קטעים-1; סך הכולל
     connections = 0
     if len(itineraries) >= 1:
         connections += max(0, len(itineraries[0].get("segments", []) or []) - 1)
@@ -116,8 +88,7 @@ def simplify_offer(offer, origin, destination, currency, adults):
         connections += max(0, len(itineraries[1].get("segments", []) or []) - 1)
 
     def split_dt(iso):
-        if not iso:
-            return "", ""
+        if not iso: return "", ""
         try:
             dt = datetime.fromisoformat(iso.replace("Z",""))
             return dt.date().isoformat(), dt.strftime("%H:%M")
@@ -144,11 +115,7 @@ def simplify_offer(offer, origin, destination, currency, adults):
         "adults": adults
     }
 
-def amadeus_search_offers(base, token, params, max_results=50, sort_by_price=True):
-    """
-    קורא ל-Amadeus Flight Offers Search; מבקש עד `max_results` תוצאות.
-    ב-test ייתכן שיוחזרו מעט מאוד הצעות — זה תקין לסנדבוקס.
-    """
+def amadeus_search_offers(base, token, params, max_results=50):
     url = f"{base}/v2/shopping/flight-offers"
     q = {
         "originLocationCode": params["origin"],
@@ -156,44 +123,28 @@ def amadeus_search_offers(base, token, params, max_results=50, sort_by_price=Tru
         "departureDate": params["depart"],
         "adults": params.get("adults", 1),
         "currencyCode": params.get("currency", "ILS"),
-        "max": max(1, min(int(max_results), 250)),
-        # "nonStop": "true"/"false" אופציונלי
+        "max": max(1, min(int(max_results), 250))
     }
-    if params.get("ret"):
-        q["returnDate"] = params["ret"]
-    if params.get("nonStop") is not None:
-        q["nonStop"] = "true" if params["nonStop"] else "false"
-
+    if params.get("ret"): q["returnDate"] = params["ret"]
     headers = {"Authorization": f"Bearer {token}"}
     r = requests.get(url, params=q, headers=headers, timeout=40)
     if not r.ok:
-        body = None
-        try:
-            body = r.json()
-        except Exception:
-            body = r.text[:500]
+        try: body = r.json()
+        except Exception: body = r.text[:500]
         log("amadeus_search_offers HTTP error:", r.status_code, body)
         r.raise_for_status()
-
     data = r.json()
     offers = data.get("data", []) or []
-    if sort_by_price:
-        offers.sort(key=lambda o: float(o.get("price", {}).get("grandTotal", "inf")))
+    offers.sort(key=lambda o: float(o.get("price", {}).get("grandTotal", "inf")))
     return offers
 
 # -------------------- Date helpers --------------------
 
 def date_range(center_iso, window_days):
-    """Return list of YYYY-MM-DD for ±window around center."""
-    if not center_iso:
-        return []
+    if not center_iso: return []
     center = datetime.fromisoformat(str(center_iso))
     window = int(window_days or 0)
-    dates = []
-    for d in range(-window, window+1):
-        day = (center + timedelta(days=d)).date().isoformat()
-        dates.append(day)
-    return dates
+    return [(center + timedelta(days=d)).date().isoformat() for d in range(-window, window+1)]
 
 # -------------------- Main --------------------
 
@@ -218,82 +169,44 @@ def main():
     amadeus_id = os.environ.get("AMADEUS_CLIENT_ID") or cfg.get("amadeus_client_id")
     amadeus_secret = os.environ.get("AMADEUS_CLIENT_SECRET") or cfg.get("amadeus_client_secret")
 
-    # לוגים מאבחנים—בלי לחשוף סודות:
-    log(f"ENV: AMADEUS_ENV={amadeus_env}  ID_present={bool(amadeus_id)}  SECRET_present={bool(amadeus_secret)}")
-
     if not (origin and destination and depart_center):
         raise RuntimeError("config.yaml חסר origin/destination/depart_center_date")
 
     depart_days = date_range(depart_center, depart_window)
 
-    # ---- קבלת token עם לוג שגיאות מפורט ----
-    try:
-        token, base = amadeus_token(amadeus_id, amadeus_secret, amadeus_env)
-    except Exception as e:
-        log("❌ נכשל בקבלת טוקן אמדאוס. ודא:")
-        log("   • שהכנסת Client ID/Secret הנכונים (לסביבת test/production תואמת)")
-        log("   • שאין רווחים בתחילת/סוף המחרוזות")
-        log("   • שב־GitHub Actions ה-Secrets מועברים נכון ל-ENV")
-        raise
-
+    # Token
+    token, base = amadeus_token(amadeus_id, amadeus_secret, amadeus_env)
     log("token ok")
 
     all_offers = []
 
     for dep in depart_days:
-        dep_dt = datetime.fromisoformat(dep)
+        base_dep = datetime.fromisoformat(dep)
         for stay in range(min_stay, max_stay + 1):
-            ret = (dep_dt + timedelta(days=stay)).date().isoformat()
+            ret = (base_dep + timedelta(days=stay)).date().isoformat()
             try:
                 raw = amadeus_search_offers(
                     base, token,
                     {"origin": origin, "destination": destination, "depart": dep, "ret": ret,
                      "adults": adults, "currency": currency},
-                    max_results=50, sort_by_price=True
+                    max_results=50
                 )
             except Exception as e:
                 log(f"warn: search {dep}->{ret} failed:", repr(e))
                 continue
-
             for o in raw:
-                simplified = simplify_offer(o, origin, destination, currency, adults)
+                s = simplify_offer(o, origin, destination, currency, adults)
                 if airline_filter:
-                    airs = [a.upper() for a in simplified["airlines"]]
+                    airs = [a.upper() for a in s["airlines"]]
                     if airline_filter.upper() not in airs:
                         continue
-                all_offers.append(simplified)
+                all_offers.append(s)
 
-    if not all_offers:
-        log("no offers found")
-        results = {
-            "generated_at": datetime.utcnow().isoformat() + "Z",
-            "amadeus_env": amadeus_env.upper(),
-            "route": {"origin": origin, "destination": destination, "adults": adults, "currency": currency},
-            "search": {
-                "depart_center_date": depart_center,
-                "depart_window_days": depart_window,
-                "min_stay_days": min_stay,
-                "max_stay_days": max_stay
-            },
-            "offers": [],
-            "best": None,
-            "threshold": threshold,
-            "below_threshold": False
-        }
-        save_json(RESULTS_PATH, results)
-        append_history({
-            "ts": datetime.utcnow().isoformat() + "Z",
-            "origin": origin, "destination": destination,
-            "depart": None, "return": None,
-            "price": None, "currency": currency,
-            "below_threshold": False
-        })
-        return
-
+    # בניית תוצאה לפי הסכימה
     all_offers.sort(key=lambda x: x["price"])
     top = all_offers[:50]
-    best = top[0]
-    below = best["price"] <= threshold
+    best = top[0] if top else None
+    below = bool(best and best["price"] <= threshold)
 
     results = {
         "generated_at": datetime.utcnow().isoformat() + "Z",
@@ -312,15 +225,18 @@ def main():
     }
     save_json(RESULTS_PATH, results)
 
+    # היסטוריה: שומר רק את המחיר הכי טוב בריצה הזו
     append_history({
         "ts": datetime.utcnow().isoformat() + "Z",
         "origin": origin, "destination": destination,
-        "depart": best["depart"], "return": best["return"],
-        "price": best["price"], "currency": currency,
+        "depart": best["depart"] if best else None,
+        "return": best["return"] if best else None,
+        "price": best["price"] if best else None,
+        "currency": currency,
         "below_threshold": below
     })
 
-    log(f"done. found={len(all_offers)} saved={len(top)} best={best['price']} {currency}")
+    log(f"done. found={len(all_offers)} saved={len(top)} best={best['price'] if best else '—'} {currency}")
 
 if __name__ == "__main__":
     try:
