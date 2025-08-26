@@ -10,6 +10,7 @@
   const form = $("cfgForm");
   const saveMsg = $("saveMsg");
 
+  // === ערכי גשר להפעלה מהדף (לא חובה אם לא משתמשים בטופס) ===
   const WORKER_URL = "https://flight-alert-bridge.tomerul85.workers.dev"; // <<< להחליף
   const OWNER = "tomerul";  // <<< להחליף
   const REPO  = "flight-alert-bot";   // שם הריפו
@@ -18,11 +19,8 @@
 
   // ---- עזר ----
   const fetchJSON = async (path, fallback) => {
-    try {
-      const r = await fetch(path + "?t=" + Date.now(), { cache: "no-store" });
-      if (!r.ok) throw 0;
-      return await r.json();
-    } catch { return fallback; }
+    try { const r = await fetch(path + "?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) throw 0; return await r.json(); }
+    catch { return fallback; }
   };
   const fmtPrice = (v) => (v == null ? "—" : Number(v).toFixed(0));
   const safe = (s) => (s ?? "").toString();
@@ -33,7 +31,36 @@
     return `https://www.google.com/travel/flights?hl=he&curr=${c || "ILS"}&flt=${encodeURIComponent(flt)};tt=m;ad=${a || 1}`;
   }
 
-  // ================= טעינה ראשונית =================
+  // ===== גרף הצעות (Bar) – עם השמדה לפני ציור =====
+  let offersChart = null;
+  function renderOffersChart(offers) {
+    const ctx = offersChartEl.getContext("2d");
+    // גובה קבוע למניעת "התארכות"
+    offersChartEl.height = 300;
+
+    if (offersChart) {
+      offersChart.destroy();
+      offersChart = null;
+    }
+    if (!offers || !offers.length) {
+      ctx.clearRect(0, 0, offersChartEl.width, offersChartEl.height);
+      return;
+    }
+    const labels = offers.map((o, i) => `#${i + 1} ${o._isDirect ? "ישירה" : "קונק'"} • ${o._airlineText || ""}`);
+    const data = offers.map(o => Number(o.price));
+    offersChart = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets: [{ label: "מחיר (ILS)", data }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        scales: { y: { beginAtZero: false } }
+      }
+    });
+  }
+
+  // =============== טעינה ראשונית ===============
   try {
     const [resData, historyRaw] = await Promise.all([
       fetchJSON("./results.json", null),
@@ -41,10 +68,10 @@
     ]);
     if (!resData) throw new Error("results.json לא נמצא");
 
-    // כותרת מצב
+    // מצב
     status.innerHTML = `עודכן לאחרונה: <code>${resData.generated_at}</code> · ENV: <code>${resData.amadeus_env || "?"}</code>`;
 
-    // מסלול/פרמטרים כלליים
+    // מסלול
     const route = resData.route || {};
     const search = resData.search || {};
     routeBox.classList.remove("hidden");
@@ -56,7 +83,7 @@
       <div class="row"><div>שהייה</div><div>מינ׳ <code>${search.min_stay_days ?? "—"}</code> · מקס׳ <code>${search.max_stay_days ?? "—"}</code> ימים</div></div>
     `;
 
-    // ===== בניית מערך הצעות =====
+    // ===== הצעות =====
     let offers = Array.isArray(resData.offers) ? resData.offers.slice() : [];
     if (!offers.length && resData.best) {
       const b = resData.best;
@@ -72,7 +99,6 @@
       }];
     }
 
-    // ניקוי/העשרה + דירוג לפי מחיר + Top-10
     offers = offers
       .filter(o => o && o.price != null && !isNaN(Number(o.price)))
       .map((o, idx) => ({
@@ -86,7 +112,7 @@
       .sort((a, b) => Number(a.price) - Number(b.price))
       .slice(0, 10);
 
-    // ===== טבלת ההצעות =====
+    // טבלה
     if (offers.length) {
       const rows = offers.map(o => `
         <tr class="${o._isDirect ? 'direct' : 'conn'}">
@@ -114,22 +140,8 @@
       offersBox.innerHTML = `<div class="dim">לא נמצאו הצעות להצגה.</div>`;
     }
 
-    // ===== גרף מחירים להצעות (עמודות) =====
-    (function renderOffersChart() {
-      const ctx = offersChartEl.getContext("2d");
-      if (!offers.length) { ctx.clearRect(0, 0, offersChartEl.width, offersChartEl.height); return; }
-      const labels = offers.map((o, i) => `#${i + 1} ${o._isDirect ? "ישירה" : "קונק'"} • ${o._airlineText || ""}`);
-      const data = offers.map(o => Number(o.price));
-      new Chart(ctx, {
-        type: "bar",
-        data: { labels, datasets: [{ label: "מחיר (ILS)", data }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: { y: { beginAtZero: false } }
-        }
-      });
-    })();
+    // גרף (עם destroy לפני יצירה)
+    renderOffersChart(offers);
 
     // ===== היסטוריה =====
     const history = (historyRaw || []).filter(x => x && x.ts);
@@ -196,7 +208,7 @@
         body: JSON.stringify({ owner: OWNER, repo: REPO, inputs })
       });
       if (!r.ok) throw new Error(await r.text() || `HTTP ${r.status}`);
-      saveMsg.textContent = "✅ נשלח. כנס ל-Actions לראות התקדמות. כשתסתיים הריצה—רענן את הדף.";
+      saveMsg.textContent = "✅ נשלח. בדוק ב-Actions; כשהריצה מסתיימת—רענן את הדף.";
     } catch (err) {
       console.error(err);
       saveMsg.textContent = "❌ שגיאה בשליחה: " + String(err);
