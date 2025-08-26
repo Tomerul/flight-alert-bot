@@ -8,10 +8,10 @@
   const form = $("cfgForm");
   const saveMsg = $("saveMsg");
 
-  const WORKER_URL = "https://YOUR-WORKER-SUBDOMAIN.workers.dev"; // <<< להחליף
-  const OWNER = "YOUR_GH_USERNAME";  // <<< להחליף
+  const WORKER_URL = "https://flight-alert-bridge.tomerul85.workers.dev"; // <<< להחליף
+  const OWNER = "tomerul";  // <<< להחליף
   const REPO  = "flight-alert-bot";  // <<< להחליף
-  const APP_SHARED_KEY = "supersecret-123"; // <<< אותו ערך כמו ב-Worker env
+  const APP_SHARED_KEY = "FlightSecret123"; // <<< אותו ערך כמו ב-Worker env
 
   const fetchJSON = async (path, fallback) => {
     try {
