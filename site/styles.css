@@ -28,3 +28,8 @@ button:hover { filter:brightness(1.1); }
 
 .direct { color: var(--ok); font-weight:700; }
 .conn   { color: var(--bad); font-weight:700; }
+
+/* כדי למנוע התארכות לא רצויה */
+#offersChart { display:block; height:300px; }
+.direct { color:#1db954; font-weight:700; } /* ישירה = ירוק */
+.conn   { color:#ff5a5a; font-weight:700; } /* קונקשן = אדום */
