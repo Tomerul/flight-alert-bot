@@ -30,6 +30,13 @@ button:hover { filter:brightness(1.1); }
 .conn   { color: var(--bad); font-weight:700; }
 
 /* כדי למנוע התארכות לא רצויה */
-#offersChart { display:block; height:300px; }
+#offersChart {
+  display: block;
+  width: 100%;
+  max-width: 1200px;   /* אופציונלי */
+  height: 320px;       /* גובה קבוע כדי למנוע "התארכות" */
+  margin-inline: auto;
+}
 .direct { color:#1db954; font-weight:700; } /* ישירה = ירוק */
 .conn   { color:#ff5a5a; font-weight:700; } /* קונקשן = אדום */
+
