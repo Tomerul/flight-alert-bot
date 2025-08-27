@@ -10,8 +10,7 @@
   const form = $("cfgForm");
   const saveMsg = $("saveMsg");
 
-  // אם לא משתמשים בהפעלה מהדף – אפשר להשאיר ערכי ברירת־מחדל
-  
+ 
   const WORKER_URL = "https://flight-alert-bridge.tomerul85.workers.dev"; // <<< להחליף
   const OWNER = "tomerul";  // <<< להחליף
   const REPO  = "flight-alert-bot";   // שם הריפו
@@ -34,15 +33,32 @@
   let offersChart = null;
   function renderOffersChart(offers) {
     const ctx = offersChartEl.getContext("2d");
-    offersChartEl.height = 300;
+
+    // 1) השמדה לפני ציור חדש
     if (offersChart) { offersChart.destroy(); offersChart = null; }
-    if (!offers || !offers.length) { ctx.clearRect(0, 0, offersChartEl.width, offersChartEl.height); return; }
+
+    // 2) נבחר גודל *קבוע* – לא רספונסיבי
+    //    width: לפי רוחב ההורה כרגע; height: קבוע 320
+    const parentW = Math.max(320, offersChartEl.parentElement.clientWidth || 800);
+    offersChartEl.width  = parentW;   // px
+    offersChartEl.height = 320;       // px
+
+    if (!offers || !offers.length) {
+      ctx.clearRect(0, 0, offersChartEl.width, offersChartEl.height);
+      return;
+    }
+
     const labels = offers.map((o, i) => `#${i + 1} ${o._isDirect ? "ישירה" : "קונק'"} • ${o._airlineText || ""}`);
     const data = offers.map(o => Number(o.price));
+
     offersChart = new Chart(ctx, {
       type: "bar",
       data: { labels, datasets: [{ label: "מחיר (ILS)", data }] },
-      options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { beginAtZero: false } } }
+      options: {
+        responsive: false,           // <<< הכי חשוב – מבטל לופ רספונסיבי
+        animation: false,
+        scales: { y: { beginAtZero: false } }
+      }
     });
   }
 
@@ -119,6 +135,7 @@
       offersBox.innerHTML = `<div class="dim">לא נמצאו הצעות להצגה.</div>`;
     }
 
+    // ציור גרף פעם אחת עם גודל קבוע
     renderOffersChart(offers);
 
     // ===== היסטוריה =====
@@ -142,7 +159,6 @@
       histTable.innerHTML = `<div class="dim">אין נתונים עדיין.</div>`;
     }
 
-    // CSV
     downloadCsvBtn?.addEventListener("click", () => {
       const rows = [["timestamp","origin","destination","depart","return","price","currency","below_threshold"]];
       for (const h of history) rows.push([h.ts,h.origin,h.destination,h.depart||"",h.return||"",h.price??"",h.currency||"",h.below_threshold?1:0]);
@@ -158,7 +174,7 @@
     console.error(err);
   }
 
-  // ===== שליחת הטופס (אם משתמשים בהפעלה מהדף) =====
+  // ===== שליחת הטופס (ללא ספינר/פולינג) =====
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     saveMsg.textContent = "שולח בקשה…";
