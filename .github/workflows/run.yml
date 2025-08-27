@@ -1,60 +1,33 @@
-name: flight-alert-schedule
+name: Run Flight Alert (cron)
 
 on:
   schedule:
-    - cron: "0 4 * * *"   # פעם ביום ב-00:00 UTC
-  workflow_dispatch: {}    # מאפשר להריץ ידנית
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
+    - cron: "0 4 * * *"   # דוגמה: כל יום 07:00 Asia/Jerusalem ≈ 04:00 UTC
+  workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  run:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
-
+    env:
+      AMADEUS_ENV: test
+      # מיפוי מה-Secrets הקיימים אצלך אל שמות שהקוד קורא
+      AMADEUS_CLIENT_ID: ${{ secrets.AMADEUS_API_KEY }}
+      AMADEUS_CLIENT_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
     steps:
       - uses: actions/checkout@v4
+
+      # בדיקת נוכחות לפני הריצה (לא חושף ערכים)
+      - name: Debug env presence
+        run: |
+          python - << 'PY'
+          import os
+          print("AMADEUS_CLIENT_ID present:", bool(os.getenv("AMADEUS_CLIENT_ID")))
+          print("AMADEUS_CLIENT_SECRET present:", bool(os.getenv("AMADEUS_CLIENT_SECRET")))
+          print("AMADEUS_ENV:", os.getenv("AMADEUS_ENV"))
+          PY
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install deps
-        run: pip install -r requirements.txt
-
-      - name: Run bot (generate results.json + history.json)
-        env:
-          AMADEUS_ENV: ${{ secrets.AMADEUS_ENV }} # השאר ריק/לא להגדיר = TEST; להגדיר ל-"prod" אם צריך פרודקשן
-          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          EMAIL_TO:   ${{ secrets.EMAIL_TO }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          AMADEUS_API_KEY: ${{ secrets.AMADEUS_API_KEY }}
-          AMADEUS_API_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
-        run: python main.py
-
-      - name: Prepare static site (dist)
-        run: |
-          mkdir -p dist
-          cp -r site/* dist/
-          cp results.json dist/  || echo '{"error":"no results.json"}' > dist/results.json
-          cp history.json dist/  || echo '[]' > dist/history.json
-          echo "✅ dist prepared:"
-          ls -la dist
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
-
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+      - run: pip install -r requirements.txt
+      - run: python main.py
