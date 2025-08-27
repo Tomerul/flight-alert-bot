@@ -3,97 +3,65 @@ name: update-config-and-run
 on:
   workflow_dispatch:
     inputs:
-      origin:             { description: "Origin (e.g. TLV)", required: true,  default: "TLV" }
-      destination:        { description: "Destination (e.g. HKT)", required: true, default: "HKT" }
-      adults:             { description: "Adults", required: true, default: "2" }
-      currency:           { description: "Currency", required: true, default: "ILS" }
-      depart_center_date: { description: "Depart center YYYY-MM-DD", required: true, default: "2025-12-20" }
-      depart_window_days: { description: "Depart ±days", required: true, default: "14" }
-      min_stay_days:      { description: "Min stay", required: true, default: "11" }
-      max_stay_days:      { description: "Max stay", required: true, default: "14" }
-      airline:            { description: "Airline filter (empty=all)", required: false, default: "" }
-      amadeus_env:        { description: "test or prod", required: false, default: "test" }
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+      origin:               { required: true,  type: string }
+      destination:          { required: true,  type: string }
+      adults:               { required: false, type: string, default: "2" }
+      currency:             { required: false, type: string, default: "ILS" }
+      depart_center_date:   { required: true,  type: string }
+      depart_window_days:   { required: false, type: string, default: "0" }
+      min_stay_days:        { required: false, type: string, default: "11" }
+      max_stay_days:        { required: false, type: string, default: "14" }
+      airline:              { required: false, type: string, default: "" }
+      amadeus_env:          { required: false, type: string, default: "test" }
 
 jobs:
-  update-and-run:
+  run:
     runs-on: ubuntu-latest
+    env:
+      AMADEUS_ENV: ${{ inputs.amadeus_env }}
+      # גם כאן אותו מיפוי
+      AMADEUS_CLIENT_ID: ${{ secrets.AMADEUS_API_KEY }}
+      AMADEUS_CLIENT_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Update config.yaml
+      - name: Debug env presence
         run: |
-          python - <<'PY'
-          import yaml, os
-          p = "config.yaml"
-          if not os.path.exists(p):
-            raise SystemExit("config.yaml missing")
-          with open(p, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-          cfg["currency"] = "${{ github.event.inputs.currency }}"
-          cfg["adults"] = int("${{ github.event.inputs.adults }}")
-          r = cfg.get("route") or {}
-          r["origin"] = "${{ github.event.inputs.origin }}"
-          r["destination"] = "${{ github.event.inputs.destination }}"
-          r["depart_center_date"] = "${{ github.event.inputs.depart_center_date }}"
-          r["depart_window_days"] = int("${{ github.event.inputs.depart_window_days }}")
-          # החזרה תחושב אוטומטית ב-main (return_center/window = AUTO)
-          r["return_center_date"] = "AUTO"
-          r["return_window_days"] = "AUTO"
-          r["max_price"] = float(cfg.get("route", {}).get("max_price", 999999))
-          airline = "${{ github.event.inputs.airline }}".strip()
-          r["airline"] = airline if airline != "" else None
-          r["min_stay_days"] = int("${{ github.event.inputs.min_stay_days }}")
-          r["max_stay_days"] = int("${{ github.event.inputs.max_stay_days }}")
-          cfg["route"] = r
-          with open(p, "w", encoding="utf-8") as f:
-            yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
-          print("✅ config.yaml updated")
+          python - << 'PY'
+          import os
+          print("AMADEUS_CLIENT_ID present:", bool(os.getenv("AMADEUS_CLIENT_ID")))
+          print("AMADEUS_CLIENT_SECRET present:", bool(os.getenv("AMADEUS_CLIENT_SECRET")))
+          print("AMADEUS_ENV:", os.getenv("AMADEUS_ENV"))
           PY
 
-      - name: Commit config
+      - name: Update config.yaml from inputs
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add config.yaml
-          git commit -m "Update config via dispatch" || echo "no changes"
-          git push
+          python - << 'PY'
+          import yaml, os, json
+          from pathlib import Path
+          cfg_path = Path("config.yaml")
+          with open(os.environ['GITHUB_EVENT_PATH'], 'r') as f:
+            evt = json.load(f)
+          inp = evt['inputs']
+          cfg = {
+            'currency': inp.get('currency','ILS'),
+            'adults': int(inp.get('adults','2')),
+            'route': {
+              'origin': inp['origin'],
+              'destination': inp['destination'],
+              'depart_center_date': inp['depart_center_date'],
+              'depart_window_days': int(inp.get('depart_window_days','0')),
+              'min_stay_days': int(inp.get('min_stay_days','11')),
+              'max_stay_days': int(inp.get('max_stay_days','14')),
+              'airline': (inp.get('airline','') or '').strip()
+            }
+          }
+          cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding='utf-8')
+          print("Wrote config.yaml")
+          PY
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install deps
-        run: pip install -r requirements.txt
-
-      - name: Run bot
-        env:
-          AMADEUS_ENV: ${{ github.event.inputs.amadeus_env }}
-          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          EMAIL_TO:   ${{ secrets.EMAIL_TO }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          AMADEUS_API_KEY: ${{ secrets.AMADEUS_API_KEY }}
-          AMADEUS_API_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
-        run: python main.py
-
-      - name: Prepare static site (dist)
-        run: |
-          mkdir -p dist
-          cp -r site/* dist/
-          cp results.json dist/ || echo '{"error":"no results.json"}' > dist/results.json
-          cp history.json dist/  || echo '[]' > dist/history.json
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
-
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+      - run: pip install -r requirements.txt
+      - run: python main.py
